@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { authApi } from "./api";
 
 export type Role = "Admin" | "Engineer" | "Manager" | "Viewer";
 export interface User {
@@ -7,6 +8,7 @@ export interface User {
   email: string;
   role: Role;
   avatar?: string;
+  department?: string;
 }
 
 interface AuthCtx {
@@ -34,39 +36,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setReady(true);
   }, []);
 
-  const persist = (u: User | null, remember = true) => {
+  const persist = (u: User | null, accessToken?: string, refreshToken?: string, remember = true) => {
     setUser(u);
-    if (u && remember) localStorage.setItem("cloudaxis-user", JSON.stringify(u));
-    else localStorage.removeItem("cloudaxis-user");
+    if (u && remember) {
+      localStorage.setItem("cloudaxis-user", JSON.stringify(u));
+      if (accessToken) localStorage.setItem("cloudaxis-access-token", accessToken);
+      if (refreshToken) localStorage.setItem("cloudaxis-refresh-token", refreshToken);
+    } else {
+      localStorage.removeItem("cloudaxis-user");
+      localStorage.removeItem("cloudaxis-access-token");
+      localStorage.removeItem("cloudaxis-refresh-token");
+    }
   };
 
-  const login: AuthCtx["login"] = async (email, _password, remember = true) => {
-    await new Promise((r) => setTimeout(r, 500));
-    const role: Role = email.startsWith("admin")
-      ? "Admin"
-      : email.startsWith("eng")
-        ? "Engineer"
-        : email.startsWith("mgr")
-          ? "Manager"
-          : "Admin";
-    const u: User = {
-      id: crypto.randomUUID(),
-      name: email.split("@")[0].replace(/\b\w/g, (c) => c.toUpperCase()) || "Alex Chen",
-      email,
-      role,
-    };
-    persist(u, remember);
-    return u;
+  const login: AuthCtx["login"] = async (email, password, remember = true) => {
+    try {
+      const tokens = await authApi.login({ email, password });
+      localStorage.setItem("cloudaxis-access-token", tokens.access_token);
+      localStorage.setItem("cloudaxis-refresh-token", tokens.refresh_token);
+      
+      const u = await authApi.me();
+      persist(u, tokens.access_token, tokens.refresh_token, remember);
+      return u;
+    } catch (error) {
+      console.error("Login failed:", error);
+      throw error;
+    }
   };
 
-  const register: AuthCtx["register"] = async (name, email) => {
-    await new Promise((r) => setTimeout(r, 600));
-    const u: User = { id: crypto.randomUUID(), name, email, role: "Engineer" };
-    persist(u);
-    return u;
+  const register: AuthCtx["register"] = async (name, email, password) => {
+    try {
+      // Default role for registration
+      const role_name = email.startsWith("admin") ? "admin" : "engineer";
+      const u = await authApi.register({ name, email, password, role_name });
+      return u;
+    } catch (error) {
+      console.error("Registration failed:", error);
+      throw error;
+    }
   };
 
-  const logout = () => persist(null);
+  const logout = async () => {
+    const refreshToken = localStorage.getItem("cloudaxis-refresh-token");
+    if (refreshToken) {
+      try {
+        await authApi.logout({ refresh_token: refreshToken });
+      } catch (error) {
+        console.error("Logout failed:", error);
+      }
+    }
+    persist(null);
+  };
 
   return (
     <Ctx.Provider value={{ user, isAuthenticated: !!user, ready, login, register, logout }}>
