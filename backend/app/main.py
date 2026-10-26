@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     print(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}")
     
     # Initialize database and seed if requested
-    if os.getenv("SEED_ON_STARTUP", "false").lower() == "true":
+    if settings.seed_on_startup:
         from app.core.database import Base, engine
         from app.dependencies import (
             get_user_repo, get_server_repo, get_vm_repo, get_storage_repo,
