@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import List
 
@@ -33,10 +33,13 @@ async def list_inventory(
 
 @router.get("/{inv_id}", response_model=InventoryOut)
 async def get_inventory_item(
-    inv_id: int,
+    inv_id: str,
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    item = await inventory_service.get_inventory_item(inv_id)
+    if inv_id.isdigit():
+        item = await inventory_service.get_inventory_item(int(inv_id))
+    else:
+        item = await inventory_service.get_inventory_item_by_inv_id(inv_id)
     if not item:
         raise HTTPException(status_code=404, detail="Inventory item not found")
     return item
@@ -52,11 +55,17 @@ async def create_inventory_item(
 
 @router.put("/{inv_id}", response_model=InventoryOut)
 async def update_inventory_item(
-    inv_id: int,
+    inv_id: str,
     item_data: InventoryUpdate,
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    item = await inventory_service.update_inventory_item(inv_id, item_data)
+    numeric_id = int(inv_id) if inv_id.isdigit() else None
+    if numeric_id is None:
+        existing = await inventory_service.get_inventory_item_by_inv_id(inv_id)
+        numeric_id = existing.id if existing else None
+    if numeric_id is None:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    item = await inventory_service.update_inventory_item(numeric_id, item_data)
     if not item:
         raise HTTPException(status_code=404, detail="Inventory item not found")
     return item
@@ -64,10 +73,16 @@ async def update_inventory_item(
 
 @router.delete("/{inv_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_inventory_item(
-    inv_id: int,
+    inv_id: str,
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    success = await inventory_service.delete_inventory_item(inv_id)
+    numeric_id = int(inv_id) if inv_id.isdigit() else None
+    if numeric_id is None:
+        existing = await inventory_service.get_inventory_item_by_inv_id(inv_id)
+        numeric_id = existing.id if existing else None
+    if numeric_id is None:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    success = await inventory_service.delete_inventory_item(numeric_id)
     if not success:
         raise HTTPException(status_code=404, detail="Inventory item not found")
     return None

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import List
 
@@ -33,10 +33,13 @@ async def list_alerts(
 
 @router.get("/{alert_id}", response_model=AlertOut)
 async def get_alert(
-    alert_id: int,
+    alert_id: str,
     alert_service: AlertService = Depends(get_alert_service),
 ):
-    alert = await alert_service.get_alert(alert_id)
+    if alert_id.isdigit():
+        alert = await alert_service.get_alert(int(alert_id))
+    else:
+        alert = await alert_service.get_alert_by_alert_id(alert_id)
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     return alert
@@ -52,11 +55,17 @@ async def create_alert(
 
 @router.put("/{alert_id}", response_model=AlertOut)
 async def update_alert(
-    alert_id: int,
+    alert_id: str,
     alert_data: AlertUpdate,
     alert_service: AlertService = Depends(get_alert_service),
 ):
-    alert = await alert_service.update_alert(alert_id, alert_data)
+    numeric_id = int(alert_id) if alert_id.isdigit() else None
+    if numeric_id is None:
+        existing = await alert_service.get_alert_by_alert_id(alert_id)
+        numeric_id = existing.id if existing else None
+    if numeric_id is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    alert = await alert_service.update_alert(numeric_id, alert_data)
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     return alert
@@ -64,10 +73,16 @@ async def update_alert(
 
 @router.delete("/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_alert(
-    alert_id: int,
+    alert_id: str,
     alert_service: AlertService = Depends(get_alert_service),
 ):
-    success = await alert_service.delete_alert(alert_id)
+    numeric_id = int(alert_id) if alert_id.isdigit() else None
+    if numeric_id is None:
+        existing = await alert_service.get_alert_by_alert_id(alert_id)
+        numeric_id = existing.id if existing else None
+    if numeric_id is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    success = await alert_service.delete_alert(numeric_id)
     if not success:
         raise HTTPException(status_code=404, detail="Alert not found")
     return None

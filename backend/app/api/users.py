@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import List
 
@@ -27,10 +27,12 @@ async def list_users(
 
 @router.get("/{user_id}", response_model=UserOut)
 async def get_user(
-    user_id: int,
+    user_id: str,
     user_service: UserService = Depends(get_user_service),
 ):
-    user = await user_service.get_user(user_id)
+    if not user_id.isdigit():
+        raise HTTPException(status_code=404, detail="User not found")
+    user = await user_service.get_user(int(user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
@@ -46,11 +48,13 @@ async def create_user(
 
 @router.put("/{user_id}", response_model=UserOut)
 async def update_user(
-    user_id: int,
+    user_id: str,
     user_data: UserUpdate,
     user_service: UserService = Depends(get_user_service),
 ):
-    user = await user_service.update_user(user_id, user_data)
+    if not user_id.isdigit():
+        raise HTTPException(status_code=404, detail="User not found")
+    user = await user_service.update_user(int(user_id), user_data)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
@@ -58,10 +62,12 @@ async def update_user(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_id: int,
+    user_id: str,
     user_service: UserService = Depends(get_user_service),
 ):
-    success = await user_service.delete_user(user_id)
+    if not user_id.isdigit():
+        raise HTTPException(status_code=404, detail="User not found")
+    success = await user_service.delete_user(int(user_id))
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
     return None

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import List
 
@@ -33,10 +33,13 @@ async def list_servers(
 
 @router.get("/{server_id}", response_model=ServerOut)
 async def get_server(
-    server_id: int,
+    server_id: str,
     server_service: ServerService = Depends(get_server_service),
 ):
-    server = await server_service.get_server(server_id)
+    if server_id.isdigit():
+        server = await server_service.get_server(int(server_id))
+    else:
+        server = await server_service.get_server_by_server_id(server_id)
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     return server
@@ -52,11 +55,17 @@ async def create_server(
 
 @router.put("/{server_id}", response_model=ServerOut)
 async def update_server(
-    server_id: int,
+    server_id: str,
     server_data: ServerUpdate,
     server_service: ServerService = Depends(get_server_service),
 ):
-    server = await server_service.update_server(server_id, server_data)
+    numeric_id = int(server_id) if server_id.isdigit() else None
+    if numeric_id is None:
+        existing = await server_service.get_server_by_server_id(server_id)
+        numeric_id = existing.id if existing else None
+    if numeric_id is None:
+        raise HTTPException(status_code=404, detail="Server not found")
+    server = await server_service.update_server(numeric_id, server_data)
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     return server
@@ -64,10 +73,16 @@ async def update_server(
 
 @router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_server(
-    server_id: int,
+    server_id: str,
     server_service: ServerService = Depends(get_server_service),
 ):
-    success = await server_service.delete_server(server_id)
+    numeric_id = int(server_id) if server_id.isdigit() else None
+    if numeric_id is None:
+        existing = await server_service.get_server_by_server_id(server_id)
+        numeric_id = existing.id if existing else None
+    if numeric_id is None:
+        raise HTTPException(status_code=404, detail="Server not found")
+    success = await server_service.delete_server(numeric_id)
     if not success:
         raise HTTPException(status_code=404, detail="Server not found")
     return None

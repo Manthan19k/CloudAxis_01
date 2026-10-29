@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import List
 
@@ -33,10 +33,13 @@ async def list_devices(
 
 @router.get("/{dev_id}", response_model=NetworkDeviceOut)
 async def get_device(
-    dev_id: int,
+    dev_id: str,
     network_service: NetworkService = Depends(get_network_service),
 ):
-    device = await network_service.get_device(dev_id)
+    if dev_id.isdigit():
+        device = await network_service.get_device(int(dev_id))
+    else:
+        device = await network_service.get_device_by_dev_id(dev_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
     return device
@@ -52,11 +55,17 @@ async def create_device(
 
 @router.put("/{dev_id}", response_model=NetworkDeviceOut)
 async def update_device(
-    dev_id: int,
+    dev_id: str,
     device_data: NetworkDeviceUpdate,
     network_service: NetworkService = Depends(get_network_service),
 ):
-    device = await network_service.update_device(dev_id, device_data)
+    numeric_id = int(dev_id) if dev_id.isdigit() else None
+    if numeric_id is None:
+        existing = await network_service.get_device_by_dev_id(dev_id)
+        numeric_id = existing.id if existing else None
+    if numeric_id is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+    device = await network_service.update_device(numeric_id, device_data)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
     return device
@@ -64,10 +73,16 @@ async def update_device(
 
 @router.delete("/{dev_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_device(
-    dev_id: int,
+    dev_id: str,
     network_service: NetworkService = Depends(get_network_service),
 ):
-    success = await network_service.delete_device(dev_id)
+    numeric_id = int(dev_id) if dev_id.isdigit() else None
+    if numeric_id is None:
+        existing = await network_service.get_device_by_dev_id(dev_id)
+        numeric_id = existing.id if existing else None
+    if numeric_id is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+    success = await network_service.delete_device(numeric_id)
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
     return None
