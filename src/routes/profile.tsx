@@ -31,7 +31,9 @@ function Profile() {
             <div className="mt-2">
               <StatusPill status="healthy" />
             </div>
-            <div className="mt-3 rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent">{user.role}</div>
+            <div className="mt-3 rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent">
+              {typeof user.role === "string" ? user.role : (user.role as any)?.name || "viewer"}
+            </div>
           </div>
         </Card>
         <Card className="lg:col-span-2">
@@ -46,8 +48,8 @@ function Profile() {
             {[
               ["Full name", user.name],
               ["Email", user.email],
-              ["Role", user.role],
-              ["Department", "IT"],
+              ["Role", typeof user.role === "string" ? user.role : (user.role as any)?.name || "viewer"],
+              ["Department", user.department || "IT"],
               ["Timezone", "UTC-05:00 America/New_York"],
               ["Language", "English (US)"],
             ].map(([l, v]) => (

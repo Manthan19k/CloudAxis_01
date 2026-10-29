@@ -1,14 +1,15 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { authApi } from "./api";
 
-export type Role = "Admin" | "Engineer" | "Manager" | "Viewer";
+export type Role = "admin" | "engineer" | "manager" | "viewer" | string;
 export interface User {
-  id: string;
+  id: number | string;
   name: string;
   email: string;
-  role: Role;
+  role: string;
   avatar?: string;
   department?: string;
+  is_active?: boolean;
 }
 
 interface AuthCtx {
@@ -17,7 +18,7 @@ interface AuthCtx {
   ready: boolean;
   login: (email: string, password: string, remember?: boolean) => Promise<User>;
   register: (name: string, email: string, password: string) => Promise<User>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx>(null!);
@@ -25,16 +26,6 @@ const Ctx = createContext<AuthCtx>(null!);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const raw = localStorage.getItem("cloudaxis-user");
-    if (raw) {
-      try {
-        setUser(JSON.parse(raw));
-      } catch {}
-    }
-    setReady(true);
-  }, []);
 
   const persist = (u: User | null, accessToken?: string, refreshToken?: string, remember = true) => {
     setUser(u);
@@ -49,15 +40,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  useEffect(() => {
+    let active = true;
+
+    async function initSession() {
+      const token = localStorage.getItem("cloudaxis-access-token");
+      const rawUser = localStorage.getItem("cloudaxis-user");
+
+      if (rawUser) {
+        try {
+          const parsed = JSON.parse(rawUser);
+          if (active) setUser(parsed);
+        } catch {
+          // ignore corrupted local state
+        }
+      }
+
+      if (token) {
+        try {
+          const freshUser = await authApi.me();
+          if (active) {
+            setUser(freshUser);
+            localStorage.setItem("cloudaxis-user", JSON.stringify(freshUser));
+          }
+        } catch (error) {
+          console.warn("Session restore failed, clearing auth state:", error);
+          if (active) {
+            persist(null);
+          }
+        }
+      } else {
+        if (active) {
+          persist(null);
+        }
+      }
+
+      if (active) {
+        setReady(true);
+      }
+    }
+
+    initSession();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const login: AuthCtx["login"] = async (email, password, remember = true) => {
     try {
-      const tokens = await authApi.login({ email, password });
-      localStorage.setItem("cloudaxis-access-token", tokens.access_token);
-      localStorage.setItem("cloudaxis-refresh-token", tokens.refresh_token);
-      
-      const u = await authApi.me();
-      persist(u, tokens.access_token, tokens.refresh_token, remember);
-      return u;
+      const tokens = await authApi.login({ email: email.trim().toLowerCase(), password, remember });
+      persist(tokens.user, tokens.access_token, tokens.refresh_token, remember);
+      return tokens.user;
     } catch (error) {
       console.error("Login failed:", error);
       throw error;
@@ -66,10 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register: AuthCtx["register"] = async (name, email, password) => {
     try {
-      // Default role for registration
-      const role_name = email.startsWith("admin") ? "admin" : "engineer";
-      const u = await authApi.register({ name, email, password, role_name });
-      return u;
+      const cleanEmail = email.trim().toLowerCase();
+      const role_name = cleanEmail.startsWith("admin") ? "admin" : "engineer";
+      const tokens = await authApi.register({ name: name.trim(), email: cleanEmail, password, role_name });
+      persist(tokens.user, tokens.access_token, tokens.refresh_token, true);
+      return tokens.user;
     } catch (error) {
       console.error("Registration failed:", error);
       throw error;
@@ -82,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await authApi.logout({ refresh_token: refreshToken });
       } catch (error) {
-        console.error("Logout failed:", error);
+        console.error("Logout request failed:", error);
       }
     }
     persist(null);

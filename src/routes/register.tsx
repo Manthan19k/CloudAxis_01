@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -23,8 +23,14 @@ function RegisterPage() {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const { register } = useAuth();
+  const { user, isAuthenticated, ready, register } = useAuth();
   const nav = useNavigate();
+
+  useEffect(() => {
+    if (ready && isAuthenticated) {
+      nav({ to: "/dashboard" });
+    }
+  }, [ready, isAuthenticated, nav]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +47,8 @@ function RegisterPage() {
       await register(name.trim(), email.trim(), password);
       toast.success("Account created. Welcome to CloudAxis.");
       nav({ to: "/dashboard" });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create account. Please try again.");
     } finally {
       setBusy(false);
     }

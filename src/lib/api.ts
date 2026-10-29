@@ -6,6 +6,8 @@ export interface TokenPair {
   access_token: string;
   refresh_token: string;
   token_type: string;
+  expires_in?: number;
+  user: User;
 }
 
 class ApiClient {
@@ -30,17 +32,18 @@ class ApiClient {
       },
     });
 
-    if (response.status === 401) {
-      // Handle token refresh or logout
-      localStorage.removeItem("cloudaxis-access-token");
-      localStorage.removeItem("cloudaxis-user");
-      window.location.href = "/login";
-      throw new Error("Unauthorized");
-    }
-
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: "An error occurred" }));
-      throw new Error(error.detail || "An error occurred");
+      const message = error.detail || error.message || "An error occurred";
+
+      // If unauthorized on protected routes (not login attempt), clear stored tokens
+      if (response.status === 401 && path !== "/auth/login") {
+        localStorage.removeItem("cloudaxis-access-token");
+        localStorage.removeItem("cloudaxis-user");
+        localStorage.removeItem("cloudaxis-refresh-token");
+      }
+
+      throw new Error(message);
     }
 
     if (response.status === 204) {
@@ -78,7 +81,7 @@ export const api = new ApiClient();
 // Domain specific API calls
 export const authApi = {
   login: (body: any) => api.post<TokenPair>("/auth/login", body),
-  register: (body: any) => api.post<User>("/auth/register", body),
+  register: (body: any) => api.post<TokenPair>("/auth/register", body),
   me: () => api.get<User>("/auth/me"),
   logout: (body: any) => api.post<void>("/auth/logout", body),
 };

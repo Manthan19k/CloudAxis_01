@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RoleOut(BaseModel):
@@ -22,7 +22,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=200)
-    role_name: str = Field(default="Engineer")
+    role_name: str = Field(default="engineer")
 
 
 class UserUpdate(BaseModel):
@@ -38,9 +38,20 @@ class UserOut(BaseModel):
     name: str
     email: str
     department: Optional[str] = None
-    role: RoleOut
+    role: str
     is_active: bool
     last_login: Optional[dt.datetime] = None
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def extract_role_name(cls, v: Any) -> str:
+        if hasattr(v, "name"):
+            return str(v.name).lower()
+        if isinstance(v, dict) and "name" in v:
+            return str(v["name"]).lower()
+        if isinstance(v, str):
+            return v.lower()
+        return "viewer"
 
 
 class UserSummary(BaseModel):

@@ -258,15 +258,15 @@ function ProfileMenu() {
             <div className="text-sm font-medium">{user.name}</div>
             <div className="text-xs text-muted-foreground">{user.email}</div>
             <div className="mt-1 inline-flex rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
-              {user.role}
+              {typeof user.role === "string" ? user.role : (user.role as any)?.name || "viewer"}
             </div>
           </div>
           <MenuItem to="/profile" icon={UserIcon} label="Profile" onClick={() => setOpen(false)} />
           <MenuItem to="/settings" icon={Settings} label="Settings" onClick={() => setOpen(false)} />
           <button
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await logout();
               toast.success("Signed out");
               nav({ to: "/login" });
             }}

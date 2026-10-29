@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -11,7 +13,7 @@ from app.schemas.user import LoginRequest, RefreshRequest, TokenPair, UserCreate
 from app.dependencies import get_user_repo
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def get_auth_service(user_repo = Depends(get_user_repo)) -> AuthService:
@@ -23,14 +25,20 @@ def get_user_service(user_repo = Depends(get_user_repo)) -> UserService:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     user_service: UserService = Depends(get_user_service),
 ) -> UserOut:
+    if not credentials or not credentials.credentials:
+        raise UnauthorizedError("Missing authentication token")
     try:
         payload = decode_token(credentials.credentials)
+        if not payload or payload.get("type") != "access":
+            raise UnauthorizedError("Invalid or expired token")
         user_id = int(payload.get("sub")) if payload.get("sub") else None
         if not user_id:
             raise UnauthorizedError("Invalid token")
+    except UnauthorizedError:
+        raise
     except Exception:
         raise UnauthorizedError("Invalid token")
     
@@ -40,7 +48,7 @@ async def get_current_user(
     return user
 
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
     auth_service: AuthService = Depends(get_auth_service),

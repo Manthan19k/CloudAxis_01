@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, CircuitBoard, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
@@ -21,14 +21,20 @@ const schema = z.object({
 });
 
 function LoginPage() {
-  const [email, setEmail] = useState("admin@cloudaxis.io");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState("admin@cloudaxis.com");
+  const [password, setPassword] = useState("AdminPass123!");
   const [remember, setRemember] = useState(true);
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-  const { login } = useAuth();
+  const { user, isAuthenticated, ready, login } = useAuth();
   const nav = useNavigate();
+
+  useEffect(() => {
+    if (ready && isAuthenticated) {
+      nav({ to: "/dashboard" });
+    }
+  }, [ready, isAuthenticated, nav]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,6 +51,8 @@ function LoginPage() {
       await login(email.trim(), password, remember);
       toast.success("Welcome back to CloudAxis");
       nav({ to: "/dashboard" });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to sign in. Please verify your credentials.");
     } finally {
       setBusy(false);
     }
@@ -108,7 +116,7 @@ function LoginPage() {
           </Link>
         </div>
         <p className="rounded-md border border-border bg-card/60 p-3 text-center text-xs text-muted-foreground">
-          Demo credentials are prefilled. Any email works — prefix with <code>admin</code>, <code>eng</code>, or <code>mgr</code> to preview roles.
+          Development credentials prefilled (<code>admin@cloudaxis.com</code> / <code>AdminPass123!</code>).
         </p>
       </form>
     </AuthShell>

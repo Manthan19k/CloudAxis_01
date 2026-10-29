@@ -1,9 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import datetime as dt
 from typing import List, Optional
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,7 +21,8 @@ class UserRepository(BaseRepository):
         return result.scalar_one_or_none()
 
     async def get_by_email(self, email: str) -> Optional[User]:
-        stmt: Select = select(User).options(selectinload(User.role)).where(User.email == email)
+        clean_email = email.strip().lower() if email else ""
+        stmt: Select = select(User).options(selectinload(User.role)).where(func.lower(User.email) == clean_email)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -36,25 +37,25 @@ class UserRepository(BaseRepository):
         return result.scalar_one_or_none()
 
     async def create_user(self, *, name: str, email: str, password: str, role_name: str, department: Optional[str] = None) -> User:
-        # Get or create role
-        role = await self.session.execute(select(Role).where(Role.name == role_name))
-        role = role.scalar_one_or_none()
+        norm_role = role_name.lower().strip() if role_name else "engineer"
+        role_stmt = select(Role).where(func.lower(Role.name) == norm_role)
+        role = (await self.session.execute(role_stmt)).scalar_one_or_none()
         if role is None:
-            role = Role(name=role_name, description=f"{role_name} role")
+            role = Role(name=norm_role, description=f"{norm_role.capitalize()} role")
             self.session.add(role)
             await self.session.flush()
         
         user = User(
-            name=name,
-            email=email.lower(),
+            name=name.strip(),
+            email=email.strip().lower(),
             hashed_password=hash_password(password),
             department=department,
             role=role,
         )
         self.session.add(user)
         await self.session.flush()
-        await self.session.refresh(user)
-        return user
+        created_user = await self.get(user.id)
+        return created_user or user
 
     async def list_users(self, *, skip: int = 0, limit: int = 100) -> List[User]:
         stmt = select(User).options(selectinload(User.role)).order_by(User.id).offset(skip).limit(limit)
