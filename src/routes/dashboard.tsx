@@ -2,14 +2,28 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/shell";
 import { Card, Metric, PageHeader, StatusPill } from "@/components/app/primitives";
 import {
-  Activity, AlertTriangle, ArrowRight, Boxes, Clock, Cpu, Database, HardDrive,
-  Network, Server, Sparkles, Thermometer, TrendingUp,
+  Activity, AlertTriangle, ArrowRight, Boxes, Clock, Cpu, Database,
+  Network, Server, Sparkles,
 } from "lucide-react";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { activities, alerts, datastores, healthScore, network, servers, seriesTimeline, vms } from "@/lib/mock-data";
+import { activities, seriesTimeline } from "@/lib/mock-data";
+import {
+  dashboardApi,
+  serversApi,
+  vmsApi,
+  storageApi,
+  networkApi,
+  alertsApi,
+  Server as ServerType,
+  VM,
+  Datastore,
+  NetworkDevice,
+  Alert as AlertType,
+} from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/dashboard")({
@@ -25,10 +39,56 @@ const chartColors = ["var(--color-info)", "var(--color-success)", "var(--color-a
 
 function Dashboard() {
   const data = seriesTimeline(24, 55, 30, 7);
-  const health = healthScore();
-  const critical = alerts.filter((a) => a.severity === "critical" && !a.resolved).length;
-  const totalCap = datastores.reduce((s, d) => s + d.capacityTB, 0);
-  const usedCap = datastores.reduce((s, d) => s + d.usedTB, 0);
+
+  const summaryQuery = useQuery({
+    queryKey: ["dashboard", "summary"],
+    queryFn: () => dashboardApi.getSummary(),
+  });
+
+  const serversQuery = useQuery({
+    queryKey: ["servers"],
+    queryFn: () => serversApi.list(),
+  });
+
+  const vmsQuery = useQuery({
+    queryKey: ["vms"],
+    queryFn: () => vmsApi.list(),
+  });
+
+  const storageQuery = useQuery({
+    queryKey: ["storage"],
+    queryFn: () => storageApi.list(),
+  });
+
+  const networkQuery = useQuery({
+    queryKey: ["network"],
+    queryFn: () => networkApi.list(),
+  });
+
+  const alertsQuery = useQuery({
+    queryKey: ["alerts"],
+    queryFn: () => alertsApi.list(),
+  });
+
+  const summary = summaryQuery.data;
+  const servers: ServerType[] = serversQuery.data?.items || [];
+  const vms: VM[] = vmsQuery.data?.items || [];
+  const datastores: Datastore[] = storageQuery.data?.items || [];
+  const networkDevices: NetworkDevice[] = networkQuery.data?.items || [];
+  const alerts: AlertType[] = alertsQuery.data?.items || [];
+
+  const health = summary?.healthScore ?? 96;
+  const critical = summary?.criticalAlerts ?? alerts.filter((a) => a.severity === "critical" && !a.resolved).length;
+  const totalCap = summary?.totalStorageTb ?? datastores.reduce((s, d) => s + (d.capacityTB || 0), 0);
+  const usedCap = summary?.usedStorageTb ?? datastores.reduce((s, d) => s + (d.usedTB || 0), 0);
+  const usedCapPct = totalCap > 0 ? Math.round((usedCap / totalCap) * 100) : 0;
+
+  const healthyServers = summary?.healthyServers ?? servers.filter((s) => s.status === "healthy").length;
+  const totalServers = summary?.totalServers ?? servers.length;
+  const healthyVms = summary?.healthyVms ?? vms.filter((v) => v.status === "healthy").length;
+  const totalVms = summary?.totalVms ?? vms.length;
+  const vmsNeedAttention = totalVms - healthyVms;
+  const activeAlertsCount = summary?.unresolvedAlerts ?? alerts.filter((a) => !a.resolved).length;
 
   const distribution = [
     { name: "Healthy", value: servers.filter((s) => s.status === "healthy").length + vms.filter((v) => v.status === "healthy").length },
@@ -36,6 +96,15 @@ function Dashboard() {
     { name: "Critical", value: servers.filter((s) => s.status === "critical").length + vms.filter((v) => v.status === "critical").length },
     { name: "Offline", value: servers.filter((s) => s.status === "offline").length + vms.filter((v) => v.status === "offline").length },
   ];
+
+  const avgLatency =
+    networkDevices.length > 0
+      ? (networkDevices.reduce((s, d) => s + (d.latencyMs || 0), 0) / networkDevices.length).toFixed(1)
+      : "1.8";
+  const avgLoss =
+    networkDevices.length > 0
+      ? (networkDevices.reduce((s, d) => s + (d.packetLoss || 0), 0) / networkDevices.length).toFixed(2)
+      : "0.04";
 
   return (
     <>
@@ -59,10 +128,34 @@ function Dashboard() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Health score" value={`${health}/100`} delta={`▲ 2 vs. last hour`} icon={Activity} color="success" />
-        <Metric label="Physical servers" value={String(servers.length)} delta={`${servers.filter((s) => s.status === "healthy").length} healthy`} icon={Server} color="info" />
-        <Metric label="Virtual machines" value={String(vms.length)} delta={`${vms.filter((v) => v.status !== "healthy").length} need attention`} icon={Boxes} color="primary" />
-        <Metric label="Active alerts" value={String(alerts.filter((a) => !a.resolved).length)} delta={`${critical} critical`} icon={AlertTriangle} color={critical > 0 ? "destructive" : "warning"} />
+        <Metric
+          label="Health score"
+          value={`${health}/100`}
+          delta="▲ 2 vs. last hour"
+          icon={Activity}
+          color="success"
+        />
+        <Metric
+          label="Physical servers"
+          value={String(totalServers)}
+          delta={`${healthyServers} healthy`}
+          icon={Server}
+          color="info"
+        />
+        <Metric
+          label="Virtual machines"
+          value={String(totalVms)}
+          delta={`${vmsNeedAttention} need attention`}
+          icon={Boxes}
+          color="primary"
+        />
+        <Metric
+          label="Active alerts"
+          value={String(activeAlertsCount)}
+          delta={`${critical} critical`}
+          icon={AlertTriangle}
+          color={critical > 0 ? "destructive" : "warning"}
+        />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -107,16 +200,14 @@ function Dashboard() {
           <div className="text-xs uppercase tracking-widest text-muted-foreground">Fleet distribution</div>
           <div className="text-lg font-semibold">Status breakdown</div>
           <div className="mt-2 h-56">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={distribution} innerRadius={54} outerRadius={80} dataKey="value" paddingAngle={4}>
-                  {distribution.map((_, i) => (
-                    <Cell key={i} fill={chartColors[i]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
+            <PieChart>
+              <Pie data={distribution} innerRadius={54} outerRadius={80} dataKey="value" paddingAngle={4}>
+                {distribution.map((_, i) => (
+                  <Cell key={i} fill={chartColors[i]} />
+                ))}
+              </Pie>
+              <Tooltip contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 12 }} />
+            </PieChart>
           </div>
           <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
             {distribution.map((d, i) => (
@@ -136,25 +227,30 @@ function Dashboard() {
             <div className="text-sm font-semibold">Storage capacity</div>
             <Database className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="text-3xl font-bold">{Math.round((usedCap / totalCap) * 100)}%</div>
+          <div className="text-3xl font-bold">{usedCapPct}%</div>
           <div className="text-xs text-muted-foreground">
-            {usedCap.toFixed(1)} TB used of {totalCap} TB
+            {usedCap.toFixed(1)} TB used of {totalCap.toFixed(1)} TB
           </div>
           <div className="mt-4 space-y-2">
-            {datastores.slice(0, 4).map((d) => (
-              <div key={d.id}>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">{d.name}</span>
-                  <span>{Math.round((d.usedTB / d.capacityTB) * 100)}%</span>
+            {datastores.slice(0, 4).map((d) => {
+              const cap = d.capacityTB || 1;
+              const used = d.usedTB || 0;
+              const pct = Math.min(100, Math.round((used / cap) * 100));
+              return (
+                <div key={d.id}>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">{d.name}</span>
+                    <span>{pct}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 rounded-full bg-secondary">
+                    <div
+                      className="h-1.5 rounded-full bg-gradient-to-r from-info via-primary to-accent"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="mt-1 h-1.5 rounded-full bg-secondary">
-                  <div
-                    className="h-1.5 rounded-full bg-gradient-to-r from-info via-primary to-accent"
-                    style={{ width: `${(d.usedTB / d.capacityTB) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
         <Card>
@@ -164,7 +260,11 @@ function Dashboard() {
           </div>
           <div className="h-52">
             <ResponsiveContainer>
-              <BarChart data={[...servers].sort((a, b) => b.cpu - a.cpu).slice(0, 6)} layout="vertical" margin={{ left: 10 }}>
+              <BarChart
+                data={[...servers].sort((a, b) => (b.cpu ?? 0) - (a.cpu ?? 0)).slice(0, 6)}
+                layout="vertical"
+                margin={{ left: 10 }}
+              >
                 <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" domain={[0, 100]} stroke="var(--color-muted-foreground)" fontSize={10} />
                 <YAxis type="category" dataKey="name" stroke="var(--color-muted-foreground)" fontSize={10} width={100} />
@@ -193,15 +293,15 @@ function Dashboard() {
           <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
             <div>
               <div className="text-muted-foreground">Devices</div>
-              <div className="mt-0.5 text-sm font-semibold">{network.length}</div>
+              <div className="mt-0.5 text-sm font-semibold">{summary?.totalNetworkDevices ?? networkDevices.length}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Avg latency</div>
-              <div className="mt-0.5 text-sm font-semibold">1.8 ms</div>
+              <div className="mt-0.5 text-sm font-semibold">{avgLatency} ms</div>
             </div>
             <div>
               <div className="text-muted-foreground">Loss</div>
-              <div className="mt-0.5 text-sm font-semibold">0.04%</div>
+              <div className="mt-0.5 text-sm font-semibold">{avgLoss}%</div>
             </div>
           </div>
         </Card>
@@ -216,28 +316,34 @@ function Dashboard() {
             </Link>
           </div>
           <ul className="space-y-2">
-            {alerts.slice(0, 6).map((a) => (
-              <li key={a.id} className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/50 p-3">
-                <span
-                  className={`grid h-8 w-8 place-items-center rounded-lg ${
-                    a.severity === "critical"
-                      ? "bg-destructive/15 text-destructive"
-                      : a.severity === "warning"
-                        ? "bg-accent/15 text-accent"
-                        : "bg-info/15 text-info"
-                  }`}
-                >
-                  <AlertTriangle className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{a.title}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {a.source} · {new Date(a.time).toLocaleTimeString()}
+            {alerts.slice(0, 6).map((a) => {
+              const alertTime = a.triggeredAt || a.time;
+              const formattedTime = alertTime
+                ? new Date(alertTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : "Just now";
+              return (
+                <li key={a.id} className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/50 p-3">
+                  <span
+                    className={`grid h-8 w-8 place-items-center rounded-lg ${
+                      a.severity === "critical"
+                        ? "bg-destructive/15 text-destructive"
+                        : a.severity === "warning"
+                          ? "bg-accent/15 text-accent"
+                          : "bg-info/15 text-info"
+                    }`}
+                  >
+                    <AlertTriangle className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{a.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {a.source} · {formattedTime}
+                    </div>
                   </div>
-                </div>
-                <StatusPill status={a.severity} />
-              </li>
-            ))}
+                  <StatusPill status={a.severity} />
+                </li>
+              );
+            })}
           </ul>
         </Card>
         <Card>

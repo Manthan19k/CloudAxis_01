@@ -3,8 +3,10 @@ import { useState } from "react";
 import { AppShell } from "@/components/app/shell";
 import { PageHeader, StatusPill } from "@/components/app/primitives";
 import { DataTable } from "@/components/app/data-table";
-import { servers as initialServers, Server } from "@/lib/mock-data";
-import { Plus, Server as ServerIcon, X } from "lucide-react";
+import { serversApi, Server } from "@/lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AlertCircle, Plus, RefreshCw, Server as ServerIcon, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/infrastructure/servers")({
@@ -17,16 +19,49 @@ export const Route = createFileRoute("/infrastructure/servers")({
 });
 
 function Servers() {
-  const [rows, setRows] = useState<Server[]>(initialServers);
+  const queryClient = useQueryClient();
   const [detail, setDetail] = useState<Server | null>(null);
   const [creating, setCreating] = useState(false);
+
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["servers"],
+    queryFn: () => serversApi.list(),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string | number) => serversApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["servers"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success("Server removed");
+      setDetail(null);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to remove server");
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (newServer: Partial<Server>) => serversApi.create(newServer),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["servers"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success("Server provisioned");
+      setCreating(false);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to provision server");
+    },
+  });
+
+  const rows = data?.items || [];
 
   return (
     <>
       <PageHeader
         eyebrow="Infrastructure"
         title="Physical Servers"
-        subtitle={`${rows.length} servers across 5 regions`}
+        subtitle={isLoading ? "Loading servers…" : `${rows.length} servers across 5 regions`}
         actions={
           <button
             onClick={() => setCreating(true)}
@@ -36,44 +71,71 @@ function Servers() {
           </button>
         }
       />
-      <DataTable
-        rows={rows}
-        onRowClick={setDetail}
-        columns={[
-          {
-            key: "name",
-            label: "Server",
-            render: (s) => (
-              <div className="flex items-center gap-2">
-                <span className="grid h-8 w-8 place-items-center rounded-lg bg-info/15 text-info">
-                  <ServerIcon className="h-4 w-4" />
-                </span>
-                <div>
-                  <div className="font-medium">{s.name}</div>
-                  <div className="text-xs text-muted-foreground">{s.ip}</div>
-                </div>
-              </div>
-            ),
-          },
-          { key: "location", label: "Region" },
-          { key: "rack", label: "Rack" },
-          { key: "cpu", label: "CPU %", render: (s) => <Bar val={s.cpu} /> },
-          { key: "memory", label: "Memory %", render: (s) => <Bar val={s.memory} /> },
-          { key: "temperature", label: "Temp", render: (s) => `${s.temperature}°C` },
-          { key: "vmCount", label: "VMs" },
-          { key: "status", label: "Status", render: (s) => <StatusPill status={s.status} /> },
-        ]}
-      />
 
-      {detail ? <ServerDrawer server={detail} onClose={() => setDetail(null)} onDelete={(id) => { setRows((r) => r.filter((x) => x.id !== id)); toast.success("Server removed"); setDetail(null); }} /> : null}
+      {isLoading ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-card p-6 shadow-card">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/5 p-10 text-center">
+          <AlertCircle className="h-10 w-10 text-destructive" />
+          <h3 className="mt-4 text-base font-semibold">Failed to load servers</h3>
+          <p className="mt-1 text-xs text-muted-foreground">{(error as any)?.message || "Network error occurred"}</p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Try again
+          </button>
+        </div>
+      ) : (
+        <DataTable
+          rows={rows}
+          onRowClick={setDetail}
+          columns={[
+            {
+              key: "name",
+              label: "Server",
+              render: (s) => (
+                <div className="flex items-center gap-2">
+                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-info/15 text-info">
+                    <ServerIcon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <div className="font-medium">{s.name}</div>
+                    <div className="text-xs text-muted-foreground">{s.ip}</div>
+                  </div>
+                </div>
+              ),
+            },
+            { key: "location", label: "Region" },
+            { key: "rack", label: "Rack" },
+            { key: "cpu", label: "CPU %", render: (s) => <Bar val={s.cpu} /> },
+            { key: "memory", label: "Memory %", render: (s) => <Bar val={s.memory} /> },
+            { key: "temperature", label: "Temp", render: (s) => `${s.temperature}°C` },
+            { key: "vmCount", label: "VMs" },
+            { key: "status", label: "Status", render: (s) => <StatusPill status={s.status} /> },
+          ]}
+        />
+      )}
+
+      {detail ? (
+        <ServerDrawer
+          server={detail}
+          onClose={() => setDetail(null)}
+          onDelete={(id) => deleteMutation.mutate(id)}
+          isDeleting={deleteMutation.isPending}
+        />
+      ) : null}
+
       {creating ? (
         <ServerForm
           onClose={() => setCreating(false)}
-          onSave={(s) => {
-            setRows((r) => [s, ...r]);
-            setCreating(false);
-            toast.success("Server provisioned");
-          }}
+          onSave={(s) => createMutation.mutate(s)}
+          isSaving={createMutation.isPending}
         />
       ) : null}
     </>
@@ -92,13 +154,23 @@ function Bar({ val }: { val: number }) {
   );
 }
 
-function ServerDrawer({ server, onClose, onDelete }: { server: Server; onClose: () => void; onDelete: (id: string) => void }) {
+function ServerDrawer({
+  server,
+  onClose,
+  onDelete,
+  isDeleting,
+}: {
+  server: Server;
+  onClose: () => void;
+  onDelete: (id: string | number) => void;
+  isDeleting?: boolean;
+}) {
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-background/60 backdrop-blur" onClick={onClose}>
       <div className="h-full w-full max-w-lg overflow-y-auto border-l border-border bg-popover p-6 shadow-card" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <div className="text-xs uppercase tracking-widest text-muted-foreground">{server.id}</div>
+            <div className="text-xs uppercase tracking-widest text-muted-foreground">{server.serverId || server.id}</div>
             <div className="text-lg font-semibold">{server.name}</div>
           </div>
           <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:text-foreground">
@@ -111,11 +183,11 @@ function ServerDrawer({ server, onClose, onDelete }: { server: Server; onClose: 
           </Info>
           <Info label="IP">{server.ip}</Info>
           <Info label="Region">{server.location}</Info>
-          <Info label="Rack">{server.rack}</Info>
-          <Info label="OS">{server.os}</Info>
-          <Info label="Owner">{server.owner}</Info>
-          <Info label="Department">{server.department}</Info>
-          <Info label="Uptime">{server.uptimeDays} days</Info>
+          <Info label="Rack">{server.rack || "—"}</Info>
+          <Info label="OS">{server.os || "—"}</Info>
+          <Info label="Owner">{server.owner || "—"}</Info>
+          <Info label="Department">{server.department || "—"}</Info>
+          <Info label="Uptime">{server.uptimeDays ?? 0} days</Info>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3">
           {[
@@ -147,10 +219,11 @@ function ServerDrawer({ server, onClose, onDelete }: { server: Server; onClose: 
             Migrate workloads
           </button>
           <button
-            onClick={() => onDelete(server.id)}
-            className="ml-auto rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive hover:bg-destructive/10"
+            disabled={isDeleting}
+            onClick={() => onDelete(server.serverId || server.id)}
+            className="ml-auto rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
           >
-            Decommission
+            {isDeleting ? "Decommissioning…" : "Decommission"}
           </button>
         </div>
       </div>
@@ -167,10 +240,19 @@ function Info({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-function ServerForm({ onClose, onSave }: { onClose: () => void; onSave: (s: Server) => void }) {
+function ServerForm({
+  onClose,
+  onSave,
+  isSaving,
+}: {
+  onClose: () => void;
+  onSave: (s: Partial<Server>) => void;
+  isSaving?: boolean;
+}) {
   const [name, setName] = useState("");
   const [ip, setIp] = useState("");
   const [location, setLocation] = useState("US-East-1");
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-background/70 p-4 backdrop-blur" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-popover p-6 shadow-card" onClick={(e) => e.stopPropagation()}>
@@ -185,11 +267,11 @@ function ServerForm({ onClose, onSave }: { onClose: () => void; onSave: (s: Serv
             e.preventDefault();
             if (!name.trim() || !ip.trim()) return toast.error("Name and IP required");
             onSave({
-              id: `SRV-${Math.floor(Math.random() * 9999)}`,
+              serverId: `SRV-${1000 + Math.floor(Math.random() * 9000)}`,
               name: name.trim(),
               ip: ip.trim(),
               location,
-              rack: "R1-U1",
+              rack: "Rack A",
               os: "Ubuntu 22.04",
               cpu: 5,
               memory: 10,
@@ -218,8 +300,12 @@ function ServerForm({ onClose, onSave }: { onClose: () => void; onSave: (s: Serv
               ))}
             </select>
           </div>
-          <button className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
-            Provision
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          >
+            {isSaving ? "Provisioning…" : "Provision"}
           </button>
         </form>
       </div>
