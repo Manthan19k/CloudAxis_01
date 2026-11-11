@@ -32,6 +32,7 @@ class UserUpdate(BaseModel):
     email: Optional[str] = Field(default=None, max_length=255)
     department: Optional[str] = None
     is_active: Optional[bool] = Field(default=None, alias="isActive")
+    role_name: Optional[str] = Field(default=None, alias="roleName")
 
 
 class UserOut(BaseModel):

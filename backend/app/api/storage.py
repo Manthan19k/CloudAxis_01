@@ -5,7 +5,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.services.storage_service import StorageService
 from app.schemas.storage import DatastoreCreate, DatastoreUpdate, DatastoreOut, DatastoreListResponse
-from app.dependencies import get_storage_repo
+from app.schemas.user import UserOut
+from app.dependencies import (
+    get_storage_repo,
+    require_authenticated,
+    require_engineer_or_admin,
+)
 
 
 router = APIRouter(prefix="/storage", tags=["storage"])
@@ -20,6 +25,7 @@ async def list_datastores(
     skip: int = 0,
     limit: int = 100,
     storage_service: StorageService = Depends(get_storage_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     datastores = await storage_service.list_datastores(skip=skip, limit=limit)
     return DatastoreListResponse(
@@ -35,6 +41,7 @@ async def list_datastores(
 async def get_datastore(
     ds_id: str,
     storage_service: StorageService = Depends(get_storage_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     if ds_id.isdigit():
         datastore = await storage_service.get_datastore(int(ds_id))
@@ -49,6 +56,7 @@ async def get_datastore(
 async def create_datastore(
     datastore_data: DatastoreCreate,
     storage_service: StorageService = Depends(get_storage_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     return await storage_service.create_datastore(datastore_data)
 
@@ -58,6 +66,7 @@ async def update_datastore(
     ds_id: str,
     datastore_data: DatastoreUpdate,
     storage_service: StorageService = Depends(get_storage_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(ds_id) if ds_id.isdigit() else None
     if numeric_id is None:
@@ -75,6 +84,7 @@ async def update_datastore(
 async def delete_datastore(
     ds_id: str,
     storage_service: StorageService = Depends(get_storage_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(ds_id) if ds_id.isdigit() else None
     if numeric_id is None:

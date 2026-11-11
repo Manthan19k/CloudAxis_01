@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app/shell";
 import { PageHeader, StatusPill } from "@/components/app/primitives";
 import { DataTable } from "@/components/app/data-table";
 import { serversApi, Server } from "@/lib/api";
+import { usePermissions } from "@/lib/permissions";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Plus, RefreshCw, Server as ServerIcon, X } from "lucide-react";
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/infrastructure/servers")({
 
 function Servers() {
   const queryClient = useQueryClient();
+  const { canProvision } = usePermissions();
   const [detail, setDetail] = useState<Server | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -63,12 +65,22 @@ function Servers() {
         title="Physical Servers"
         subtitle={isLoading ? "Loading servers…" : `${rows.length} servers across 5 regions`}
         actions={
-          <button
-            onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add server
-          </button>
+          canProvision ? (
+            <button
+              onClick={() => setCreating(true)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add server
+            </button>
+          ) : (
+            <button
+              disabled
+              title="Requires Engineer or Administrator privileges"
+              className="inline-flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 text-xs font-medium text-muted-foreground cursor-not-allowed opacity-60"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add server
+            </button>
+          )
         }
       />
 
@@ -165,6 +177,7 @@ function ServerDrawer({
   onDelete: (id: string | number) => void;
   isDeleting?: boolean;
 }) {
+  const { canProvision } = usePermissions();
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-background/60 backdrop-blur" onClick={onClose}>
       <div className="h-full w-full max-w-lg overflow-y-auto border-l border-border bg-popover p-6 shadow-card" onClick={(e) => e.stopPropagation()}>
@@ -218,13 +231,23 @@ function ServerDrawer({
           >
             Migrate workloads
           </button>
-          <button
-            disabled={isDeleting}
-            onClick={() => onDelete(server.serverId || server.id)}
-            className="ml-auto rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
-          >
-            {isDeleting ? "Decommissioning…" : "Decommission"}
-          </button>
+          {canProvision ? (
+            <button
+              disabled={isDeleting}
+              onClick={() => onDelete(server.serverId || server.id)}
+              className="ml-auto rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {isDeleting ? "Decommissioning…" : "Decommission"}
+            </button>
+          ) : (
+            <button
+              disabled
+              title="Requires Engineer or Administrator privileges"
+              className="ml-auto rounded-md border border-border px-3 py-2 text-xs text-muted-foreground cursor-not-allowed opacity-50"
+            >
+              Decommission
+            </button>
+          )}
         </div>
       </div>
     </div>

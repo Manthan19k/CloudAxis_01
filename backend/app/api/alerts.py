@@ -5,7 +5,13 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.services.alert_service import AlertService
 from app.schemas.alert import AlertCreate, AlertUpdate, AlertOut, AlertListResponse
-from app.dependencies import get_alert_repo
+from app.schemas.user import UserOut
+from app.dependencies import (
+    get_alert_repo,
+    require_authenticated,
+    require_engineer_or_admin,
+    require_operational_write,
+)
 
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -20,6 +26,7 @@ async def list_alerts(
     skip: int = 0,
     limit: int = 100,
     alert_service: AlertService = Depends(get_alert_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     alerts = await alert_service.list_alerts(skip=skip, limit=limit)
     return AlertListResponse(
@@ -35,6 +42,7 @@ async def list_alerts(
 async def get_alert(
     alert_id: str,
     alert_service: AlertService = Depends(get_alert_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     if alert_id.isdigit():
         alert = await alert_service.get_alert(int(alert_id))
@@ -49,6 +57,7 @@ async def get_alert(
 async def create_alert(
     alert_data: AlertCreate,
     alert_service: AlertService = Depends(get_alert_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     return await alert_service.create_alert(alert_data)
 
@@ -58,6 +67,7 @@ async def update_alert(
     alert_id: str,
     alert_data: AlertUpdate,
     alert_service: AlertService = Depends(get_alert_service),
+    current_user: UserOut = Depends(require_operational_write),
 ):
     numeric_id = int(alert_id) if alert_id.isdigit() else None
     if numeric_id is None:
@@ -75,6 +85,7 @@ async def update_alert(
 async def delete_alert(
     alert_id: str,
     alert_service: AlertService = Depends(get_alert_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(alert_id) if alert_id.isdigit() else None
     if numeric_id is None:
@@ -94,6 +105,7 @@ async def list_alerts_by_severity(
     skip: int = 0,
     limit: int = 100,
     alert_service: AlertService = Depends(get_alert_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     alerts = await alert_service.list_alerts_by_severity(severity, skip=skip, limit=limit)
     return AlertListResponse(

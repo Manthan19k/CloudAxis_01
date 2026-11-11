@@ -2,11 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/shell";
 import { PageHeader, StatusPill } from "@/components/app/primitives";
 import { DataTable } from "@/components/app/data-table";
-import { usersApi, authApi } from "@/lib/api";
+import { usersApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { usePermissions } from "@/lib/permissions";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Plus, RefreshCw, X } from "lucide-react";
+import { AlertCircle, Plus, RefreshCw, Shield, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/users")({
@@ -32,11 +34,14 @@ export interface UserRow {
 
 function Users() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { isAdmin } = usePermissions();
   const [inviting, setInviting] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["users"],
     queryFn: () => usersApi.list(),
+    enabled: isAdmin,
   });
 
   const toggleAccessMutation = useMutation({
@@ -59,13 +64,7 @@ function Users() {
       password: string;
       department?: string;
     }) => {
-      try {
-        return await usersApi.create(userData);
-      } catch {
-        // Fallback to auth registration if backend /users/ router throws AttributeError
-        const res = await authApi.register(userData);
-        return res.user;
-      }
+      return await usersApi.create(userData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -76,6 +75,18 @@ function Users() {
       toast.error(err.message || "Failed to invite user");
     },
   });
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/5 p-12 text-center">
+        <Shield className="h-12 w-12 text-destructive" />
+        <h3 className="mt-4 text-base font-semibold">Access Denied</h3>
+        <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+          Administrator privileges are required to view and manage user accounts.
+        </p>
+      </div>
+    );
+  }
 
   const rows: UserRow[] = (data as any) || [];
 
@@ -171,13 +182,17 @@ function Users() {
               label: "Access",
               render: (u) => {
                 const active = u.isActive ?? u.active ?? u.is_active ?? true;
+                const isSelf = String(u.id) === String(user?.id) || u.email?.toLowerCase() === user?.email?.toLowerCase();
                 return (
                   <button
-                    disabled={toggleAccessMutation.isPending}
+                    disabled={toggleAccessMutation.isPending || (active && isSelf)}
+                    title={active && isSelf ? "You cannot deactivate your own account" : undefined}
                     onClick={() =>
                       toggleAccessMutation.mutate({ id: u.id, currentActive: active })
                     }
-                    className="rounded-md border border-border px-2 py-1 text-xs hover:text-foreground disabled:opacity-50"
+                    className={`rounded-md border border-border px-2 py-1 text-xs hover:text-foreground disabled:opacity-50 ${
+                      active && isSelf ? "cursor-not-allowed opacity-40 text-muted-foreground" : ""
+                    }`}
                   >
                     {active ? "Disable" : "Enable"}
                   </button>

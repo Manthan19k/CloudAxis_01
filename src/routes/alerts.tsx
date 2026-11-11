@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app/shell";
 import { PageHeader, StatusPill } from "@/components/app/primitives";
 import { DataTable } from "@/components/app/data-table";
 import { alertsApi, Alert } from "@/lib/api";
+import { usePermissions } from "@/lib/permissions";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, AlertTriangle, Check, RefreshCw } from "lucide-react";
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/alerts")({
 
 function Alerts() {
   const queryClient = useQueryClient();
+  const { canAckAlerts } = usePermissions();
   const [filter, setFilter] = useState<"all" | "critical" | "warning" | "info">("all");
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -148,28 +150,48 @@ function Alerts() {
               render: (a) => (
                 <div className="flex gap-1">
                   {!a.acknowledged ? (
-                    <button
-                      disabled={ackMutation.isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        ackMutation.mutate(a.alertId || a.id);
-                      }}
-                      className="rounded-md border border-border px-2 py-1 text-xs hover:text-foreground disabled:opacity-50"
-                    >
-                      Ack
-                    </button>
+                    canAckAlerts ? (
+                      <button
+                        disabled={ackMutation.isPending}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          ackMutation.mutate(a.alertId || a.id);
+                        }}
+                        className="rounded-md border border-border px-2 py-1 text-xs hover:text-foreground disabled:opacity-50"
+                      >
+                        Ack
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        title="Requires Manager, Engineer, or Administrator privileges"
+                        className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground cursor-not-allowed opacity-40"
+                      >
+                        Ack
+                      </button>
+                    )
                   ) : null}
                   {!a.resolved ? (
-                    <button
-                      disabled={resolveMutation.isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        resolveMutation.mutate(a.alertId || a.id);
-                      }}
-                      className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2 py-1 text-xs text-success disabled:opacity-50"
-                    >
-                      <Check className="h-3 w-3" /> Resolve
-                    </button>
+                    canAckAlerts ? (
+                      <button
+                        disabled={resolveMutation.isPending}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resolveMutation.mutate(a.alertId || a.id);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2 py-1 text-xs text-success disabled:opacity-50"
+                      >
+                        <Check className="h-3 w-3" /> Resolve
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        title="Requires Manager, Engineer, or Administrator privileges"
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground cursor-not-allowed opacity-40"
+                      >
+                        <Check className="h-3 w-3" /> Resolve
+                      </button>
+                    )
                   ) : null}
                 </div>
               ),

@@ -5,7 +5,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.services.server_service import ServerService
 from app.schemas.server import ServerCreate, ServerUpdate, ServerOut, ServerListResponse
-from app.dependencies import get_server_repo
+from app.schemas.user import UserOut
+from app.dependencies import (
+    get_server_repo,
+    require_authenticated,
+    require_engineer_or_admin,
+)
 
 
 router = APIRouter(prefix="/servers", tags=["servers"])
@@ -20,6 +25,7 @@ async def list_servers(
     skip: int = 0,
     limit: int = 100,
     server_service: ServerService = Depends(get_server_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     servers = await server_service.list_servers(skip=skip, limit=limit)
     return ServerListResponse(
@@ -35,6 +41,7 @@ async def list_servers(
 async def get_server(
     server_id: str,
     server_service: ServerService = Depends(get_server_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     if server_id.isdigit():
         server = await server_service.get_server(int(server_id))
@@ -49,6 +56,7 @@ async def get_server(
 async def create_server(
     server_data: ServerCreate,
     server_service: ServerService = Depends(get_server_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     return await server_service.create_server(server_data)
 
@@ -58,6 +66,7 @@ async def update_server(
     server_id: str,
     server_data: ServerUpdate,
     server_service: ServerService = Depends(get_server_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(server_id) if server_id.isdigit() else None
     if numeric_id is None:
@@ -75,6 +84,7 @@ async def update_server(
 async def delete_server(
     server_id: str,
     server_service: ServerService = Depends(get_server_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(server_id) if server_id.isdigit() else None
     if numeric_id is None:

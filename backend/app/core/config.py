@@ -5,12 +5,21 @@ import os
 from functools import lru_cache
 from typing import List, Union
 
-from pydantic import Field, PostgresDsn, field_validator
+from pydantic import Field, PostgresDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_DB_FILE = os.path.join(BACKEND_DIR, "cloudaxis.db").replace("\\", "/")
 DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{DEFAULT_DB_FILE}"
+DEFAULT_DEV_SECRET = "super-secret-key-change-me-in-production"
+INSECURE_SECRETS = {
+    DEFAULT_DEV_SECRET,
+    "secret",
+    "changeme",
+    "password",
+    "supersecret",
+    "",
+}
 
 
 class Settings(BaseSettings):
@@ -53,10 +62,23 @@ class Settings(BaseSettings):
         return v
 
     # --- Security ----------------------------------------------------------
-    secret_key: str = Field(default="super-secret-key-change-me-in-production", alias="SECRET_KEY")
+    secret_key: str = Field(default=DEFAULT_DEV_SECRET, alias="SECRET_KEY")
     access_token_expire_minutes: int = Field(default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=7, alias="REFRESH_TOKEN_EXPIRE_DAYS")
     algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        env = (self.environment or "development").strip().lower()
+        is_production = env in ("production", "prod", "staging")
+        secret = self.secret_key or ""
+        is_insecure = secret in INSECURE_SECRETS or len(secret) < 32
+        if is_production and is_insecure:
+            raise ValueError(
+                "Insecure or missing SECRET_KEY in production environment. "
+                "A strong, unique SECRET_KEY (at least 32 characters) must be configured."
+            )
+        return self
 
     # --- CORS --------------------------------------------------------------
     BACKEND_CORS_ORIGINS: List[str] = Field(

@@ -5,7 +5,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.services.inventory_service import InventoryService
 from app.schemas.inventory import InventoryCreate, InventoryUpdate, InventoryOut, InventoryListResponse
-from app.dependencies import get_inventory_repo
+from app.schemas.user import UserOut
+from app.dependencies import (
+    get_inventory_repo,
+    require_authenticated,
+    require_engineer_or_admin,
+)
 
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -20,6 +25,7 @@ async def list_inventory(
     skip: int = 0,
     limit: int = 100,
     inventory_service: InventoryService = Depends(get_inventory_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     items = await inventory_service.list_inventory(skip=skip, limit=limit)
     return InventoryListResponse(
@@ -35,6 +41,7 @@ async def list_inventory(
 async def get_inventory_item(
     inv_id: str,
     inventory_service: InventoryService = Depends(get_inventory_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     if inv_id.isdigit():
         item = await inventory_service.get_inventory_item(int(inv_id))
@@ -49,6 +56,7 @@ async def get_inventory_item(
 async def create_inventory_item(
     item_data: InventoryCreate,
     inventory_service: InventoryService = Depends(get_inventory_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     return await inventory_service.create_inventory_item(item_data)
 
@@ -58,6 +66,7 @@ async def update_inventory_item(
     inv_id: str,
     item_data: InventoryUpdate,
     inventory_service: InventoryService = Depends(get_inventory_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(inv_id) if inv_id.isdigit() else None
     if numeric_id is None:
@@ -75,6 +84,7 @@ async def update_inventory_item(
 async def delete_inventory_item(
     inv_id: str,
     inventory_service: InventoryService = Depends(get_inventory_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(inv_id) if inv_id.isdigit() else None
     if numeric_id is None:
@@ -94,6 +104,7 @@ async def list_inventory_by_category(
     skip: int = 0,
     limit: int = 100,
     inventory_service: InventoryService = Depends(get_inventory_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     items = await inventory_service.list_inventory_by_category(category, skip=skip, limit=limit)
     return InventoryListResponse(

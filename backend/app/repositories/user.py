@@ -7,6 +7,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.exceptions import ValidationError
 from app.core.security import hash_password
 from app.models.user import RefreshToken, Role, User
 from app.repositories.base import BaseRepository
@@ -36,14 +37,30 @@ class UserRepository(BaseRepository):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_role_by_name(self, role_name: str) -> Optional[Role]:
+        if not role_name:
+            return None
+        norm_role = role_name.lower().strip()
+        stmt = select(Role).where(func.lower(Role.name) == norm_role)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def count_active_admins(self) -> int:
+        admin_role = await self.get_role_by_name("admin")
+        if not admin_role:
+            return 0
+        stmt = select(func.count(User.id)).where(
+            User.role_id == admin_role.id,
+            User.is_active == True,
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
     async def create_user(self, *, name: str, email: str, password: str, role_name: str, department: Optional[str] = None) -> User:
         norm_role = role_name.lower().strip() if role_name else "engineer"
-        role_stmt = select(Role).where(func.lower(Role.name) == norm_role)
-        role = (await self.session.execute(role_stmt)).scalar_one_or_none()
+        role = await self.get_role_by_name(norm_role)
         if role is None:
-            role = Role(name=norm_role, description=f"{norm_role.capitalize()} role")
-            self.session.add(role)
-            await self.session.flush()
+            raise ValidationError(f"Role '{role_name}' does not exist")
         
         user = User(
             name=name.strip(),

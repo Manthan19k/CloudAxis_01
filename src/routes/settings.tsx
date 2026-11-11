@@ -2,8 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/shell";
 import { Card, PageHeader } from "@/components/app/primitives";
 import { useAuth } from "@/lib/auth";
+import { usePermissions } from "@/lib/permissions";
 import { useTheme } from "@/lib/theme";
 import { useState } from "react";
+import { Shield } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
@@ -17,8 +19,22 @@ export const Route = createFileRoute("/settings")({
 
 function Settings() {
   const { user } = useAuth();
+  const { isAdmin } = usePermissions();
   const { theme, setTheme } = useTheme();
   const [tab, setTab] = useState<"general" | "appearance" | "email" | "alerts" | "security" | "backup">("general");
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/5 p-12 text-center">
+        <Shield className="h-12 w-12 text-destructive" />
+        <h3 className="mt-4 text-base font-semibold">Access Denied</h3>
+        <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+          Administrator privileges are required to configure workspace settings.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <>
       <PageHeader eyebrow="Administration" title="Settings" subtitle="Workspace configuration and preferences." />

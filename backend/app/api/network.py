@@ -5,7 +5,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.services.network_service import NetworkService
 from app.schemas.network import NetworkDeviceCreate, NetworkDeviceUpdate, NetworkDeviceOut, NetworkDeviceListResponse
-from app.dependencies import get_network_repo
+from app.schemas.user import UserOut
+from app.dependencies import (
+    get_network_repo,
+    require_authenticated,
+    require_engineer_or_admin,
+)
 
 
 router = APIRouter(prefix="/network", tags=["network"])
@@ -20,6 +25,7 @@ async def list_devices(
     skip: int = 0,
     limit: int = 100,
     network_service: NetworkService = Depends(get_network_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     devices = await network_service.list_devices(skip=skip, limit=limit)
     return NetworkDeviceListResponse(
@@ -35,6 +41,7 @@ async def list_devices(
 async def get_device(
     dev_id: str,
     network_service: NetworkService = Depends(get_network_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     if dev_id.isdigit():
         device = await network_service.get_device(int(dev_id))
@@ -49,6 +56,7 @@ async def get_device(
 async def create_device(
     device_data: NetworkDeviceCreate,
     network_service: NetworkService = Depends(get_network_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     return await network_service.create_device(device_data)
 
@@ -58,6 +66,7 @@ async def update_device(
     dev_id: str,
     device_data: NetworkDeviceUpdate,
     network_service: NetworkService = Depends(get_network_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(dev_id) if dev_id.isdigit() else None
     if numeric_id is None:
@@ -75,6 +84,7 @@ async def update_device(
 async def delete_device(
     dev_id: str,
     network_service: NetworkService = Depends(get_network_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(dev_id) if dev_id.isdigit() else None
     if numeric_id is None:

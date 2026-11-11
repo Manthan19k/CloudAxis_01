@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import uuid
 from typing import Optional
 
 import bcrypt
@@ -28,6 +29,7 @@ def create_access_token(user_id: int, role: str, extra: Optional[dict] = None) -
     payload = {
         "sub": str(user_id),
         "role": role,
+        "jti": uuid.uuid4().hex,
         "iat": now,
         "exp": now + dt.timedelta(minutes=settings.access_token_expire_minutes),
         "type": "access",
@@ -41,6 +43,7 @@ def create_refresh_token(user_id: int) -> str:
     now = dt.datetime.now(dt.timezone.utc)
     payload = {
         "sub": str(user_id),
+        "jti": uuid.uuid4().hex,
         "iat": now,
         "exp": now + dt.timedelta(days=settings.refresh_token_expire_days),
         "type": "refresh",

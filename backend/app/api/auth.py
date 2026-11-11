@@ -3,49 +3,23 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 
-from app.core.security import decode_token
-from app.core.exceptions import UnauthorizedError
 from app.services.auth_service import AuthService
-from app.services.user_service import UserService
 from app.schemas.user import LoginRequest, RefreshRequest, TokenPair, UserCreate, UserOut
-from app.dependencies import get_user_repo
+from app.dependencies import (
+    get_user_repo,
+    get_user_service,
+    get_current_user,
+    get_optional_current_user,
+    security,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-security = HTTPBearer(auto_error=False)
 
 
 def get_auth_service(user_repo = Depends(get_user_repo)) -> AuthService:
     return AuthService(user_repo)
-
-
-def get_user_service(user_repo = Depends(get_user_repo)) -> UserService:
-    return UserService(user_repo)
-
-
-async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    user_service: UserService = Depends(get_user_service),
-) -> UserOut:
-    if not credentials or not credentials.credentials:
-        raise UnauthorizedError("Missing authentication token")
-    try:
-        payload = decode_token(credentials.credentials)
-        if not payload or payload.get("type") != "access":
-            raise UnauthorizedError("Invalid or expired token")
-        user_id = int(payload.get("sub")) if payload.get("sub") else None
-        if not user_id:
-            raise UnauthorizedError("Invalid token")
-    except UnauthorizedError:
-        raise
-    except Exception:
-        raise UnauthorizedError("Invalid token")
-    
-    user = await user_service.get_user(user_id)
-    if not user:
-        raise UnauthorizedError("User not found")
-    return user
 
 
 @router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)

@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
+import { usePermissions } from "@/lib/permissions";
 import { useTheme } from "@/lib/theme";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Boxes, ChartLine, ChevronRight,
@@ -56,6 +57,7 @@ const sections = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, ready, logout } = useAuth();
+  const { isAdmin } = usePermissions();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -65,6 +67,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (ready && !isAuthenticated) nav({ to: "/login" });
   }, [ready, isAuthenticated, nav]);
+
+  const visibleSections = useMemo(() => {
+    return sections.filter((sec) => {
+      if (sec.label === "Administration") return isAdmin;
+      return true;
+    });
+  }, [isAdmin]);
 
   const unread = useMemo(() => alerts.filter((a) => !a.acknowledged).length, []);
 
@@ -94,7 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
         <nav className="h-[calc(100vh-4rem)] overflow-y-auto px-3 pb-6">
-          {sections.map((sec) => (
+          {visibleSections.map((sec) => (
             <div key={sec.label} className="mb-5">
               <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
                 {sec.label}
@@ -230,6 +239,7 @@ function Breadcrumbs() {
 
 function ProfileMenu() {
   const { user, logout } = useAuth();
+  const { isAdmin } = usePermissions();
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
   if (!user) return null;
@@ -262,7 +272,9 @@ function ProfileMenu() {
             </div>
           </div>
           <MenuItem to="/profile" icon={UserIcon} label="Profile" onClick={() => setOpen(false)} />
-          <MenuItem to="/settings" icon={Settings} label="Settings" onClick={() => setOpen(false)} />
+          {isAdmin ? (
+            <MenuItem to="/settings" icon={Settings} label="Settings" onClick={() => setOpen(false)} />
+          ) : null}
           <button
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={async () => {

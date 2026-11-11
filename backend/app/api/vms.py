@@ -5,7 +5,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.services.vm_service import VMService
 from app.schemas.vm import VMCreate, VMUpdate, VMOut, VMListResponse
-from app.dependencies import get_vm_repo
+from app.schemas.user import UserOut
+from app.dependencies import (
+    get_vm_repo,
+    require_authenticated,
+    require_engineer_or_admin,
+)
 
 
 router = APIRouter(prefix="/vms", tags=["vms"])
@@ -20,6 +25,7 @@ async def list_vms(
     skip: int = 0,
     limit: int = 100,
     vm_service: VMService = Depends(get_vm_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     vms = await vm_service.list_vms(skip=skip, limit=limit)
     return VMListResponse(
@@ -35,6 +41,7 @@ async def list_vms(
 async def get_vm(
     vm_id: str,
     vm_service: VMService = Depends(get_vm_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     if vm_id.isdigit():
         vm = await vm_service.get_vm(int(vm_id))
@@ -49,6 +56,7 @@ async def get_vm(
 async def create_vm(
     vm_data: VMCreate,
     vm_service: VMService = Depends(get_vm_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     return await vm_service.create_vm(vm_data)
 
@@ -58,6 +66,7 @@ async def update_vm(
     vm_id: str,
     vm_data: VMUpdate,
     vm_service: VMService = Depends(get_vm_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(vm_id) if vm_id.isdigit() else None
     if numeric_id is None:
@@ -75,6 +84,7 @@ async def update_vm(
 async def delete_vm(
     vm_id: str,
     vm_service: VMService = Depends(get_vm_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     numeric_id = int(vm_id) if vm_id.isdigit() else None
     if numeric_id is None:
@@ -94,6 +104,7 @@ async def list_vms_by_server(
     skip: int = 0,
     limit: int = 100,
     vm_service: VMService = Depends(get_vm_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     numeric_id = int(server_id) if server_id.isdigit() else 0
     vms = await vm_service.list_vms_by_server(numeric_id, skip=skip, limit=limit)

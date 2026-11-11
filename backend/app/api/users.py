@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.services.user_service import UserService
 from app.schemas.user import UserCreate, UserUpdate, UserOut
-from app.dependencies import get_user_repo
+from app.dependencies import get_user_repo, require_admin
 
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -20,6 +20,7 @@ async def list_users(
     skip: int = 0,
     limit: int = 100,
     user_service: UserService = Depends(get_user_service),
+    current_admin: UserOut = Depends(require_admin),
 ):
     users = await user_service.list_users(skip=skip, limit=limit)
     return users
@@ -29,6 +30,7 @@ async def list_users(
 async def get_user(
     user_id: str,
     user_service: UserService = Depends(get_user_service),
+    current_admin: UserOut = Depends(require_admin),
 ):
     if not user_id.isdigit():
         raise HTTPException(status_code=404, detail="User not found")
@@ -42,6 +44,7 @@ async def get_user(
 async def create_user(
     user_data: UserCreate,
     user_service: UserService = Depends(get_user_service),
+    current_admin: UserOut = Depends(require_admin),
 ):
     return await user_service.create_user(user_data)
 
@@ -51,10 +54,15 @@ async def update_user(
     user_id: str,
     user_data: UserUpdate,
     user_service: UserService = Depends(get_user_service),
+    current_admin: UserOut = Depends(require_admin),
 ):
     if not user_id.isdigit():
         raise HTTPException(status_code=404, detail="User not found")
-    user = await user_service.update_user(int(user_id), user_data)
+    user = await user_service.update_user(
+        int(user_id),
+        user_data,
+        current_user_id=current_admin.id,
+    )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
@@ -64,10 +72,14 @@ async def update_user(
 async def delete_user(
     user_id: str,
     user_service: UserService = Depends(get_user_service),
+    current_admin: UserOut = Depends(require_admin),
 ):
     if not user_id.isdigit():
         raise HTTPException(status_code=404, detail="User not found")
-    success = await user_service.delete_user(int(user_id))
+    success = await user_service.delete_user(
+        int(user_id),
+        current_user_id=current_admin.id,
+    )
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
     return None

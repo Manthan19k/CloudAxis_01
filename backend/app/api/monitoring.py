@@ -1,11 +1,16 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.services.monitoring_service import MonitoringService
 from app.schemas.monitoring import MetricSampleCreate, MetricSampleOut
-from app.dependencies import get_monitoring_repo
+from app.schemas.user import UserOut
+from app.dependencies import (
+    get_monitoring_repo,
+    require_authenticated,
+    require_engineer_or_admin,
+)
 
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
@@ -19,6 +24,7 @@ def get_monitoring_service(monitoring_repo = Depends(get_monitoring_repo)) -> Mo
 async def create_metric(
     metric_data: MetricSampleCreate,
     monitoring_service: MonitoringService = Depends(get_monitoring_service),
+    current_user: UserOut = Depends(require_engineer_or_admin),
 ):
     return await monitoring_service.create_metric(metric_data)
 
@@ -29,6 +35,7 @@ async def list_metrics_by_device(
     skip: int = 0,
     limit: int = 100,
     monitoring_service: MonitoringService = Depends(get_monitoring_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     metrics = await monitoring_service.list_metrics_by_device(device_id, skip=skip, limit=limit)
     return metrics
@@ -40,6 +47,7 @@ async def list_recent_metrics(
     skip: int = 0,
     limit: int = 100,
     monitoring_service: MonitoringService = Depends(get_monitoring_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     metrics = await monitoring_service.list_recent_metrics(hours=hours, skip=skip, limit=limit)
     return metrics

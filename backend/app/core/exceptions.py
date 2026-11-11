@@ -14,6 +14,11 @@ class AppException(Exception):
         self.code = code
 
 
+class BadRequestError(AppException):
+    def __init__(self, detail: str = "Bad request"):
+        super().__init__(status.HTTP_400_BAD_REQUEST, detail, "bad_request")
+
+
 class UnauthorizedError(AppException):
     def __init__(self, detail: str = "Not authenticated"):
         super().__init__(status.HTTP_401_UNAUTHORIZED, detail, "unauthorized")
@@ -34,9 +39,12 @@ class ConflictError(AppException):
         super().__init__(status.HTTP_409_CONFLICT, detail, "conflict")
 
 
+STATUS_422 = getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422)
+
+
 class ValidationError(AppException):
     def __init__(self, detail: str = "Validation failed"):
-        super().__init__(status.HTTP_422_UNPROCESSABLE_ENTITY, detail, "validation_error")
+        super().__init__(STATUS_422, detail, "validation_error")
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -54,7 +62,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             loc = ".".join(str(p) for p in err["loc"] if p != "body")
             errors.append({"field": loc, "message": err["msg"]})
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=STATUS_422,
             content={
                 "error": True,
                 "code": "validation_error",

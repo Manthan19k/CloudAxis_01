@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app/shell";
 import { PageHeader, StatusPill } from "@/components/app/primitives";
 import { DataTable } from "@/components/app/data-table";
 import { vmsApi, VM } from "@/lib/api";
+import { usePermissions } from "@/lib/permissions";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Boxes, Plus, RefreshCw } from "lucide-react";
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/infrastructure/vms")({
 
 function VMs() {
   const queryClient = useQueryClient();
+  const { canProvision } = usePermissions();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["vms"],
@@ -47,30 +49,40 @@ function VMs() {
         title="Virtual Machines"
         subtitle={isLoading ? "Loading virtual machines…" : `${rows.length} VMs across ${hostCount} hosts`}
         actions={
-          <button
-            disabled={createMutation.isPending}
-            onClick={() => {
-              createMutation.mutate({
-                vmId: `VM-${2000 + Math.floor(Math.random() * 8000)}`,
-                name: `vm-srv-${rows.length + 1}`,
-                host: rows.length > 0 && rows[0].host ? rows[0].host : "Web Server 01",
-                os: "Ubuntu 22.04",
-                vCPU: 4,
-                memoryGB: 16,
-                diskGB: 80,
-                cpu: 8,
-                memory: 20,
-                status: "healthy",
-                ip: `10.20.0.${rows.length + 10}`,
-                owner: "Alex Chen",
-                department: "IT",
-                snapshots: 0,
-              });
-            }}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
-          >
-            <Plus className="h-3.5 w-3.5" /> {createMutation.isPending ? "Provisioning…" : "New VM"}
-          </button>
+          canProvision ? (
+            <button
+              disabled={createMutation.isPending}
+              onClick={() => {
+                createMutation.mutate({
+                  vmId: `VM-${2000 + Math.floor(Math.random() * 8000)}`,
+                  name: `vm-srv-${rows.length + 1}`,
+                  host: rows.length > 0 && rows[0].host ? rows[0].host : "Web Server 01",
+                  os: "Ubuntu 22.04",
+                  vCPU: 4,
+                  memoryGB: 16,
+                  diskGB: 80,
+                  cpu: 8,
+                  memory: 20,
+                  status: "healthy",
+                  ip: `10.20.0.${rows.length + 10}`,
+                  owner: "Alex Chen",
+                  department: "IT",
+                  snapshots: 0,
+                });
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" /> {createMutation.isPending ? "Provisioning…" : "New VM"}
+            </button>
+          ) : (
+            <button
+              disabled
+              title="Requires Engineer or Administrator privileges"
+              className="inline-flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 text-xs font-medium text-muted-foreground cursor-not-allowed opacity-60"
+            >
+              <Plus className="h-3.5 w-3.5" /> New VM
+            </button>
+          )
         }
       />
 

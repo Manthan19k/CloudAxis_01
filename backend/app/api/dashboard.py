@@ -1,11 +1,13 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from app.services.dashboard_service import DashboardService
 from app.schemas.health import DashboardSummary, CapacityForecastResponse
+from app.schemas.user import UserOut
 from app.dependencies import (
     get_server_repo, get_vm_repo, get_storage_repo, get_network_repo,
-    get_alert_repo, get_inventory_repo, get_monitoring_repo
+    get_alert_repo, get_inventory_repo, get_monitoring_repo,
+    require_authenticated,
 )
 
 
@@ -35,6 +37,7 @@ def get_dashboard_service(
 @router.get("/summary", response_model=DashboardSummary)
 async def get_dashboard_summary(
     dashboard_service: DashboardService = Depends(get_dashboard_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     return await dashboard_service.get_dashboard_summary()
 
@@ -42,5 +45,6 @@ async def get_dashboard_summary(
 @router.get("/forecast", response_model=CapacityForecastResponse)
 async def get_capacity_forecast(
     dashboard_service: DashboardService = Depends(get_dashboard_service),
+    current_user: UserOut = Depends(require_authenticated),
 ):
     return await dashboard_service.get_capacity_forecast()

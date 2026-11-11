@@ -24,12 +24,12 @@ class AuthService:
         if existing:
             raise ValidationError("User with this email already exists")
 
-        # Create new user
+        # Create new user - force safe "viewer" role for public registration
         user = await self.user_repo.create_user(
             name=user_data.name.strip(),
             email=clean_email,
             password=user_data.password,
-            role_name=user_data.role_name,
+            role_name="viewer",
             department=user_data.department,
         )
 
@@ -65,6 +65,9 @@ class AuthService:
         if not user or not verify_password(login_data.password, user.hashed_password):
             raise UnauthorizedError("Invalid email or password")
 
+        if not user.is_active:
+            raise UnauthorizedError("Account is inactive or disabled")
+
         # Create tokens
         role_name = user.role.name.lower() if user.role else "viewer"
         access_token = create_access_token(user_id=user.id, role=role_name)
@@ -97,6 +100,9 @@ class AuthService:
         if not user:
             raise UnauthorizedError("Invalid refresh token")
 
+        if not user.is_active:
+            raise UnauthorizedError("Account is inactive or disabled")
+
         # Create new tokens
         role_name = user.role.name.lower() if user.role else "viewer"
         access_token = create_access_token(user_id=user.id, role=role_name)
@@ -122,6 +128,6 @@ class AuthService:
 
     async def get_current_user(self, user_id: int) -> Optional[UserOut]:
         user = await self.user_repo.get(user_id)
-        if user:
+        if user and user.is_active:
             return UserOut.model_validate(user)
         return None
